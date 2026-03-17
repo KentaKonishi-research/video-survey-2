@@ -71,7 +71,7 @@ if 'page' not in st.session_state:
 # 同意
 if st.session_state.page == "consent":
     st.title("調査へのご協力のお願い")
-    st.info("本調査に協力しないことによる不利益は一切ございません。収集された回答は研究目的以外には使用しません。文学部 傳研究室3年 小西健太")
+    st.info("本調査に協力しないことによる不利益は一切ございません。収集された回答は研究目的以外には使用しません。文学部人文学科行動科学コース認知情報科学専修 　傳研究室3年 小西健太")
     if st.button("同意して次へ"):
         st.session_state.page = "demographics"; st.rerun()
 
