@@ -9,25 +9,29 @@ from streamlit_gsheets import GSheetsConnection
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def save_to_gsheets(data_dict):
-    """標準的な接続方法で保存する"""
+    """URLを直接指定して、場所を100%特定させる保存関数"""
+    # あなたのスプレッドシートのURL
+    target_url = "https://docs.google.com/spreadsheets/d/1q6HOPMDs3qVNJ78msAKyU_lZ7AVs1606mn4P9qemZnI/edit#gid=0"
+    
     with st.status("データを保存しています...", expanded=False) as status:
         try:
-            # 接続情報を Secrets から自動で読み込む
-            # spreadsheet=... の指定を外して、Secrets の設定に任せます
-            df = conn.read(ttl=0)
+            # 修正：spreadsheet=target_url を明示的に追加
+            df = conn.read(spreadsheet=target_url, ttl=0)
             
             # 新しい行を作成
             new_row = pd.DataFrame([data_dict])
-            # 結合
+            
+            # 既存データと結合（列名が一致していることが前提）
             updated_df = pd.concat([df, new_row], ignore_index=True)
             
-            # 書き込みを実行
-            conn.update(data=updated_df)
+            # 修正：書き込み時も spreadsheet=target_url を明示的に指定
+            conn.update(spreadsheet=target_url, data=updated_df)
             
             status.update(label="✅ 保存に成功しました！", state="complete", expanded=False)
             return True
         except Exception as e:
             status.update(label="❌ 保存に失敗しました", state="error", expanded=True)
+            # エラーの詳細（Unauthorized等）を再度確認するため、そのまま表示
             st.error(f"エラー詳細: {e}")
             return False
 
