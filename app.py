@@ -5,32 +5,24 @@ import datetime
 from streamlit_gsheets import GSheetsConnection
 
 # --- 1. スプレッドシート接続設定 ---
-# 接続を確立
+# 接続時に secrets から直接読み込むように指定
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def save_to_gsheets(data_dict):
-    """保存先のIDを直接指定して実行する"""
     with st.status("データを保存しています...", expanded=False) as status:
         try:
-            # SecretsからスプレッドシートIDを直接取得
-            target_spreadsheet = st.secrets["connections"]["gsheets"]["spreadsheet_id"]
-            
-            # 読み込み時にIDを明示的に指定
-            df = conn.read(spreadsheet=target_spreadsheet, ttl=0)
-            
-            # 新しい行を作成
+            # 修正：secrets を直接参照するのではなく connection オブジェクトに任せる
+            df = conn.read(ttl=0)
             new_row = pd.DataFrame([data_dict])
-            # 結合
             updated_df = pd.concat([df, new_row], ignore_index=True)
-            
-            # 書き込み時にもIDを明示的に指定
-            conn.update(spreadsheet=target_spreadsheet, data=updated_df)
+            conn.update(data=updated_df)
             
             status.update(label="✅ 保存に成功しました！", state="complete", expanded=False)
             return True
         except Exception as e:
+            # もしエラーが出たら、ここでもう一度詳細を表示
             status.update(label="❌ 保存に失敗しました", state="error", expanded=True)
-            st.error(f"エラー詳細: {e}")
+            st.error(f"詳細エラー: {e}")
             return False
 
 # --- 2. 動画データの設定 ---
