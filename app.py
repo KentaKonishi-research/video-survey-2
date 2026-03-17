@@ -5,27 +5,29 @@ import datetime
 from streamlit_gsheets import GSheetsConnection
 
 # --- 1. スプレッドシート接続設定 ---
+# 接続を確立
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def save_to_gsheets(data_dict):
-    """画面に進行状況を出しながら保存する"""
-    # 画面の右下に小さな通知（トースト）を出します
-    st.toast(f"保存を開始します: {data_dict['video_name']}")
-    try:
-        # スプレッドシートを読み込む
-        df = conn.read(ttl=0)
-        # 新しい行を作成
-        new_row = pd.DataFrame([data_dict])
-        # 既存データと結合
-        updated_df = pd.concat([df, new_row], ignore_index=True)
-        # スプレッドシート全体を更新
-        conn.update(data=updated_df)
-        st.toast("✅ スプレッドシートの保存に成功しました！", icon="🎉")
-        return True
-    except Exception as e:
-        # 失敗した場合は画面に大きくエラーを出す
-        st.error(f"【重大なエラー】保存に失敗しました。この画面をスクリーンショットして管理者に送ってください: {e}")
-        return False
+    """保存中のステータスを表示しながら実行する"""
+    # 画面に「保存中...」というステータスを表示
+    with st.status("データを保存しています...", expanded=False) as status:
+        try:
+            # 既存のデータを読み込む
+            df = conn.read(ttl=0)
+            # 新しい行を作成
+            new_row = pd.DataFrame([data_dict])
+            # 結合
+            updated_df = pd.concat([df, new_row], ignore_index=True)
+            # 書き込みを実行
+            conn.update(data=updated_df)
+            
+            status.update(label="✅ 保存に成功しました！", state="complete", expanded=False)
+            return True
+        except Exception as e:
+            status.update(label="❌ 保存に失敗しました", state="error", expanded=True)
+            st.error(f"エラー詳細: {e}")
+            return False
 
 # --- 2. 動画データの設定 ---
 VIDEO_DATA = [
@@ -59,7 +61,6 @@ VIDEO_DATA = [
     {"name": "T023_007 沈黙②", "url": "https://youtu.be/XmmipswjZPE"},
 ]
 
-# --- 3. セッション管理 ---
 if 'page' not in st.session_state:
     st.session_state.page = "consent"
     st.session_state.video_order = random.sample(VIDEO_DATA, len(VIDEO_DATA))
@@ -67,34 +68,40 @@ if 'page' not in st.session_state:
     st.session_state.user_info = {}
     st.session_state.user_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
-# --- 4. 画面制御 ---
+# 同意
 if st.session_state.page == "consent":
     st.title("調査へのご協力のお願い")
-    st.info("本調査に協力しないことによる不利益は一切ございません。収集された回答は研究以外の目的に使用することはございません。\n\n文学部人文学科行動科学コース認知情報科学専修傳研究室３年小西健太")
+    st.info("本調査に協力しないことによる不利益は一切ございません。収集された回答は研究目的以外には使用しません。文学部 傳研究室3年 小西健太")
     if st.button("同意して次へ"):
         st.session_state.page = "demographics"; st.rerun()
 
+# 属性
 elif st.session_state.page == "demographics":
     st.title("属性情報の入力")
-    gender = st.radio("質問：性別をお答えください。", ["男", "女", "回答しない", "その他"], index=None)
-    age = st.text_input("質問：年齢をお答えください。（半角数字のみ）")
+    gender = st.radio("性別", ["男", "女", "回答しない", "その他"], index=None)
+    age = st.text_input("年齢（半角数字のみ）")
     if st.button("調査を開始する"):
         if gender and age and age.isascii() and age.isdigit():
             st.session_state.user_info = {"gender": gender, "age": age}
             st.session_state.page = "experiment"; st.rerun()
         else:
-            st.error("入力に不備があります。年齢は半角数字で入力してください。")
+            st.error("入力内容を確認してください。年齢は半角数字です。")
 
+# 実験
 elif st.session_state.page == "experiment":
     current = st.session_state.video_order[st.session_state.current_idx]
-    st.title(f"評価 ({st.session_state.current_idx + 1} / {len(VIDEO_DATA)})")
+    st.title(f"気まずさの評価 ({st.session_state.current_idx + 1} / {len(VIDEO_DATA)})")
     st.video(current["url"])
-    score = st.radio("動画の最終部分の沈黙について、評価を選択してください。（1=気まずくない、6=気まずい）", [1,2,3,4,5,6], horizontal=True, index=None, key=f"q_{st.session_state.current_idx}")
+    
+    score = st.radio(
+        "動画の最後にある沈黙の評価を選択してください。（1 = 気まずくない、6 = 気まずい）",
+        options=[1, 2, 3, 4, 5, 6], horizontal=True, index=None, key=f"q_{st.session_state.current_idx}"
+    )
     
     if st.button("回答して次へ"):
         if score:
-            # 保存実行
-            save_to_gsheets({
+            # 保存処理を実行
+            success = save_to_gsheets({
                 "user_id": st.session_state.user_id,
                 "gender": st.session_state.user_info["gender"],
                 "age": st.session_state.user_info["age"],
@@ -102,13 +109,19 @@ elif st.session_state.page == "experiment":
                 "rating": score,
                 "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             })
-            if st.session_state.current_idx + 1 < len(VIDEO_DATA):
-                st.session_state.current_idx += 1; st.rerun()
-            else:
-                st.session_state.page = "finish"; st.rerun()
+            
+            # 保存に成功した時だけ次に進む（失敗した時はその場でエラーを見せる）
+            if success:
+                if st.session_state.current_idx + 1 < len(VIDEO_DATA):
+                    st.session_state.current_idx += 1
+                    st.rerun()
+                else:
+                    st.session_state.page = "finish"
+                    st.rerun()
         else:
             st.warning("評価を選択してください。")
 
 elif st.session_state.page == "finish":
     st.title("調査終了")
-    st.success("回答はすべてスプレッドシートに自動保存されました。ご協力ありがとうございました。")
+    st.balloons()
+    st.success("回答はすべて正常に保存されました。ご協力ありがとうございました。")
