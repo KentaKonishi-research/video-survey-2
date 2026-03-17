@@ -81,9 +81,9 @@ elif st.session_state.page == "demographics":
 # C. 実験
 elif st.session_state.page == "experiment":
     current = st.session_state.video_order[st.session_state.current_idx]
-    st.title(f"評価 ({st.session_state.current_idx + 1} / {len(VIDEO_DATA)})")
+    st.title(f"気まずさの評価 ({st.session_state.current_idx + 1} / {len(VIDEO_DATA)})")
     st.video(current["url"])
-    score = st.radio("評価（1=気まずくない、6=気まずい）", [1,2,3,4,5,6], horizontal=True, index=None, key=f"q_{st.session_state.current_idx}")
+    score = st.radio("動画の最終部分の沈黙について気まずさを評価してください（1=気まずくない、6=気まずい）", [1,2,3,4,5,6], horizontal=True, index=None, key=f"q_{st.session_state.current_idx}")
     
     if st.button("回答して次へ"):
         if score:
