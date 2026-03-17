@@ -9,31 +9,26 @@ from streamlit_gsheets import GSheetsConnection
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def save_to_gsheets(data_dict):
-    """スプレッドシートのURLを直接指定して保存する"""
-    # あなたのスプレッドシートのフルURL
-    target_url = "https://docs.google.com/spreadsheets/d/1q6HOPMDs3qVNJ78msAKyU_lZ7AVs1606mn4P9qemZnI/edit#gid=0"
-    
+    """標準的な接続方法で保存する"""
     with st.status("データを保存しています...", expanded=False) as status:
         try:
-            # 修正：spreadsheet=target_url を追加して場所を明示する
-            df = conn.read(spreadsheet=target_url, ttl=0)
+            # 接続情報を Secrets から自動で読み込む
+            # spreadsheet=... の指定を外して、Secrets の設定に任せます
+            df = conn.read(ttl=0)
             
             # 新しい行を作成
             new_row = pd.DataFrame([data_dict])
-            
-            # 既存データと結合
+            # 結合
             updated_df = pd.concat([df, new_row], ignore_index=True)
             
-            # 修正：ここでも場所を明示して書き込む
-            conn.update(spreadsheet=target_url, data=updated_df)
+            # 書き込みを実行
+            conn.update(data=updated_df)
             
             status.update(label="✅ 保存に成功しました！", state="complete", expanded=False)
             return True
         except Exception as e:
             status.update(label="❌ 保存に失敗しました", state="error", expanded=True)
             st.error(f"エラー詳細: {e}")
-            # ログにも詳細を出す
-            print(f"Detailed Error: {e}")
             return False
 
 # --- 2. 動画データの設定 ---
