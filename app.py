@@ -9,18 +9,22 @@ from streamlit_gsheets import GSheetsConnection
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def save_to_gsheets(data_dict):
-    """保存中のステータスを表示しながら実行する"""
-    # 画面に「保存中...」というステータスを表示
+    """保存先のIDを直接指定して実行する"""
     with st.status("データを保存しています...", expanded=False) as status:
         try:
-            # 既存のデータを読み込む
-            df = conn.read(ttl=0)
+            # SecretsからスプレッドシートIDを直接取得
+            target_spreadsheet = st.secrets["connections"]["gsheets"]["spreadsheet_id"]
+            
+            # 読み込み時にIDを明示的に指定
+            df = conn.read(spreadsheet=target_spreadsheet, ttl=0)
+            
             # 新しい行を作成
             new_row = pd.DataFrame([data_dict])
             # 結合
             updated_df = pd.concat([df, new_row], ignore_index=True)
-            # 書き込みを実行
-            conn.update(data=updated_df)
+            
+            # 書き込み時にもIDを明示的に指定
+            conn.update(spreadsheet=target_spreadsheet, data=updated_df)
             
             status.update(label="✅ 保存に成功しました！", state="complete", expanded=False)
             return True
