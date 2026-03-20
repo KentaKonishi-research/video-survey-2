@@ -5,33 +5,22 @@ import datetime
 from streamlit_gsheets import GSheetsConnection
 
 # --- 1. スプレッドシート接続設定 ---
-# 接続時に secrets から直接読み込むように指定
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def save_to_gsheets(data_dict):
     """URLを直接指定して、場所を100%特定させる保存関数"""
-    # あなたのスプレッドシートのURL
     target_url = "https://docs.google.com/spreadsheets/d/1q6HOPMDs3qVNJ78msAKyU_lZ7AVs1606mn4P9qemZnI/edit#gid=0"
     
     with st.status("データを保存しています...", expanded=False) as status:
         try:
-            # 修正：spreadsheet=target_url を明示的に追加
             df = conn.read(spreadsheet=target_url, ttl=0)
-            
-            # 新しい行を作成
             new_row = pd.DataFrame([data_dict])
-            
-            # 既存データと結合（列名が一致していることが前提）
             updated_df = pd.concat([df, new_row], ignore_index=True)
-            
-            # 修正：書き込み時も spreadsheet=target_url を明示的に指定
             conn.update(spreadsheet=target_url, data=updated_df)
-            
             status.update(label="✅ 保存に成功しました！", state="complete", expanded=False)
             return True
         except Exception as e:
             status.update(label="❌ 保存に失敗しました", state="error", expanded=True)
-            # エラーの詳細（Unauthorized等）を再度確認するため、そのまま表示
             st.error(f"エラー詳細: {e}")
             return False
 
@@ -67,6 +56,7 @@ VIDEO_DATA = [
     {"name": "T023_007 沈黙②", "url": "https://youtu.be/XmmipswjZPE"},
 ]
 
+# --- 3. セッション管理 ---
 if 'page' not in st.session_state:
     st.session_state.page = "consent"
     st.session_state.video_order = random.sample(VIDEO_DATA, len(VIDEO_DATA))
@@ -74,14 +64,16 @@ if 'page' not in st.session_state:
     st.session_state.user_info = {}
     st.session_state.user_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
-# 同意
+# --- 4. 画面制御 ---
+
+# A. 説明と同意
 if st.session_state.page == "consent":
     st.title("調査へのご協力のお願い")
-    st.info("本調査に協力しないことによる不利益は一切ございません。収集された回答は研究目的以外には使用しません。文学部人文学科行動科学コース認知情報科学専修 　傳研究室3年 小西健太")
+    st.info("本調査に協力しないことによる不利益は一切ございません。収集された回答は研究目的以外には使用しません。\n\n文学部人文学科行動科学コース認知情報科学専修傳研究室３年 小西健太")
     if st.button("同意して次へ"):
         st.session_state.page = "demographics"; st.rerun()
 
-# 属性
+# B. 属性
 elif st.session_state.page == "demographics":
     st.title("属性情報の入力")
     gender = st.radio("性別", ["男", "女", "回答しない", "その他"], index=None)
@@ -93,11 +85,21 @@ elif st.session_state.page == "demographics":
         else:
             st.error("入力内容を確認してください。年齢は半角数字です。")
 
-# 実験
+# C. 実験（評価画面）
 elif st.session_state.page == "experiment":
     current = st.session_state.video_order[st.session_state.current_idx]
-    st.title(f"気まずさの評価 ({st.session_state.current_idx + 1} / {len(VIDEO_DATA)})")
+    total_len = len(VIDEO_DATA)
+    st.title(f"気まずさの評価 ({st.session_state.current_idx + 1} / {total_len})")
+    
+    # 【追加箇所】教示の文言を強調して表示
+    st.markdown("""
+    **以下の動画を視聴し、最終部分に存在する沈黙について評価してください。**  
+    評価は動画の最終部分の沈黙のみを対象とし、その他の部分に存在する沈黙については対象外です。
+    """)
+    
     st.video(current["url"])
+    
+    st.divider()
     
     score = st.radio(
         "動画の最後にある沈黙の評価を選択してください。（1 = 気まずくない、6 = 気まずい）",
@@ -106,7 +108,6 @@ elif st.session_state.page == "experiment":
     
     if st.button("回答して次へ"):
         if score:
-            # 保存処理を実行
             success = save_to_gsheets({
                 "user_id": st.session_state.user_id,
                 "gender": st.session_state.user_info["gender"],
@@ -115,10 +116,8 @@ elif st.session_state.page == "experiment":
                 "rating": score,
                 "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             })
-            
-            # 保存に成功した時だけ次に進む（失敗した時はその場でエラーを見せる）
             if success:
-                if st.session_state.current_idx + 1 < len(VIDEO_DATA):
+                if st.session_state.current_idx + 1 < total_len:
                     st.session_state.current_idx += 1
                     st.rerun()
                 else:
